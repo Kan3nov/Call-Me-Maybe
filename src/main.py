@@ -10,19 +10,22 @@ if __name__ == "__main__":
     vocab_file = llm.get_path_to_vocab_file()
     print(vocab_file)
     with open(vocab_file, "r") as f:
-        prompt = "hello!"
-        id_tensor = llm.encode(prompt)[0].tolist()
-        logits = llm.get_logits_from_input_ids(id_tensor)  # prediction time
-        next_token = logits.index(max(logits))
         vocabulary = f.read()
         vocab_json = json.loads(vocabulary)
-        for _ in range(10):
-            for key, value in vocab_json.items():
-                if value == next_token:
-                    print(key, end="")
-                    break
-            prompt += key
+
+        prompt = 'You have to fill the content with one word and then close the curly bracket' + \
+            '{"role": "user", "content": "hello!"}, ' + \
+            '{"role": "assistant", "content": '
+        response = ""
+        next_token = None
+        i = 0
+        while next_token != 151643 and i < 20:
             id_tensor = llm.encode(prompt)[0].tolist()
             logits = llm.get_logits_from_input_ids(id_tensor)
             next_token = logits.index(max(logits))
-        print()
+            id_tensor.append(next_token)
+            response += llm.decode([next_token])
+            prompt = llm.decode(id_tensor)
+            i += 1
+        print("prompt: ", prompt)
+        print("response: ", response)
