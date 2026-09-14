@@ -1,15 +1,18 @@
 vpath %.py src
 
-NAME = main.py
+all: run clean
 
-all: install run
+run: install
+	@uv run python -m src
 
-run: $(NAME)
-	@uv run src/main.py
 install:
 	@uv sync
+
+debug: install
+	@uv run python -m pdb src/__main__.py
+
 clean:
-	rm -rf __pycache__ .mypy_cache
+	@find \( -name "__pycache__" -o -name ".mypy_cache" \) -prune -exec rm -rf {} \;
 
 lint:
 	flake8 . and mypy . --warn-return-any --warn-unused-ignores
