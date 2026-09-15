@@ -42,7 +42,7 @@ class LlmResGen(BaseModel):
 
     def predict_func(self, usr_prompt: str) -> str:
         prompt = self.sys_prompt + f"""\
-User Prompt: {usr_prompt}\nYour Response: \
+Prompt: {usr_prompt}\nResponse: \
 {{"prompt":"{usr_prompt}","name":"\
 """
         func_name = ""

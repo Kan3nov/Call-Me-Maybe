@@ -17,24 +17,31 @@ if __name__ == "__main__":
     user_prompt = "Reverse the string 'hello'"
 
     sys_prompt = f"""
-Your role is to pick the most suitable function out of those functions:
-{functions}\n that returns right answer to the user
-prompt given according to its description. Then you have to
-determine the parameters of this functions
-corresponding to the
-the user prompt STRICTLY IN JSON format.
+Your role is to pick the most suitable function out of those functions: \
+{functions}\n that returns right answer to the user \
+prompt given according to its description. Then you have to \
+determine the parameters of this function \
+corresponding to the user prompt STRICTLY IN JSON \
+format and end the statement. \
+Always put numbers as with a FLOATING POINT in the parameters.
 
 Prompt: What is the sum of 2 and 3?
 Response: {{\"prompt\":\"What is the sum of 2 and 3?\",\
 \"name\":\"fn_add_numbers\",\"parameters\":\
-{{"a":2,"b":3}}}}\n
+{{"a":2.0,"b":3.0}}}}<eos>\n
 
 COMPLY with what stated above verbatim.\n
 
-User Prompt: {user_prompt}\nYour Response: \
-{{"prompt":"{user_prompt}","name":"\
+Prompt: {user_prompt}
+Response: {{"prompt":"{user_prompt}","name":"\
 """
     response_gen = LlmResGen(sys_prompt=sys_prompt,
                              llm=LLM(),
                              files_dirs=files_dirs)
+    next_token = response_gen.predict_token(sys_prompt)
+    while (next_token[1] != 151645):
+        print(next_token)
+        sys_prompt += next_token[0]
+        next_token = response_gen.predict_token(sys_prompt)
+
     print(response_gen.predict_func("What is the sum of 2 and 3?"))
