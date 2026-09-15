@@ -1,10 +1,8 @@
-import sys
-from parsing import validation
-from llm import LlmResGen
-
 try:
     from llm_sdk import Small_LLM_Model as LLM
-    import json
+    import sys
+    from parsing import validation
+    from llm import LlmResGen
 except Exception as e:
     print("Import Error,", e)
 
@@ -36,4 +34,7 @@ COMPLY with what stated above verbatim.\n
 User Prompt: {user_prompt}\nYour Response: \
 {{"prompt":"{user_prompt}","name":"\
 """
-    response_gen = LlmResGen(sys_prompt, LLM())
+    response_gen = LlmResGen(sys_prompt=sys_prompt,
+                             llm=LLM(),
+                             files_dirs=files_dirs)
+    print(response_gen.predict_func("What is the sum of 2 and 3?"))
