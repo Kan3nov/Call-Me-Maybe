@@ -27,21 +27,18 @@ Always put numbers as with a FLOATING POINT in the parameters.
 
 Prompt: What is the sum of 2 and 3?
 Response: {{\"prompt\":\"What is the sum of 2 and 3?\",\
-\"name\":\"fn_add_numbers\",\"parameters\":\
-{{"a":2.0,"b":3.0}}}}<eos>\n
+\"name\":\"fn_add_numbers\"
+
+,\"parameters\":\
+{{"a":2.0,"b":3.0}}}}\n
 
 COMPLY with what stated above verbatim.\n
-
-Prompt: {user_prompt}
-Response: {{"prompt":"{user_prompt}","name":"\
 """
     response_gen = LlmResGen(sys_prompt=sys_prompt,
                              llm=LLM(),
                              files_dirs=files_dirs)
-    next_token = response_gen.predict_token(sys_prompt)
-    while (next_token[1] != 151645):
-        print(next_token)
-        sys_prompt += next_token[0]
-        next_token = response_gen.predict_token(sys_prompt)
-
-    print(response_gen.predict_func("What is the sum of 2 and 3?"))
+    usr_prompt = "Reverse the string 'hello'"
+    func_name = response_gen.predict_func(usr_prompt)
+    print("function name: ", func_name)
+    params = response_gen.predict_params(usr_prompt, func_name)
+    print(params)
