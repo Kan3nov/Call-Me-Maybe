@@ -16,7 +16,6 @@ class Param(Enum):
 
 
 class LlmResGen(BaseModel):
-    sys_prompt: str
     llm: InstanceOf[LLM]
     files_dirs: dict[str, str]
     funcs: list[dict[str, Any]] = None
@@ -47,6 +46,14 @@ class LlmResGen(BaseModel):
             exit()
         return self
 
+    def gen_answer_obj(self, prompt: str):
+        obj = {}
+        obj["prompt"] = prompt
+        obj["name"] = self.predict_func(prompt)
+        params = self.predict_params(prompt, obj["name"])
+        obj["parameters"] = params
+        return obj
+
     def predict_token(self, prompt: str) -> tuple[str, int]:
         id_tensor = self.llm.encode(prompt)[0].tolist()
         logits = self.llm.get_logits_from_input_ids(id_tensor)
@@ -73,7 +80,6 @@ Response: "name":"\
         func_name = ""
         while (1):
             next_token = self.predict_token(prompt)
-            print(next_token)
             for function in self.funcs:
                 if (function["name"].find(func_name + next_token[0]) != -1):
                     func_name = func_name + next_token[0]
@@ -83,55 +89,95 @@ Response: "name":"\
                 break
         return func_name
 
-    def end_gen(self, token: str, type: str, prompt: str = None):
+    def end_gen(self, type: str, param: str):
         if type == "string":
-            idx = prompt.rfind('"')
-            if prompt[idx - 1] != "\\":
+            idx = param.rfind('"')
+            if idx > 0 and param[idx - 1] != "\\":
                 return 1
             return 0
-        if type == "integer" or type == "number" \
-                or type == "float" or type == "boolean":
-            if ',' in token or "}" in token:
+        elif type == "number" or type == "boolean":
+            if ',' in param or "}" in param:
+                return 1
+            return 0
+        elif type == "integer":
+            if '.' in param:
                 return 1
             return 0
         return 0
 
     def predict_params(self, usr_prompt: str, func_name: str) -> str:
         prompt = f"""
-        Your role is to \
-        determine the parameters of the function \
-        corresponding to the user prompt STRICTLY IN JSON \
-        format and end the statement. \
-        Always put numbers as with a FLOATING POINT in the parameters.
+Your role is to \
+determine the parameters of the function \
+corresponding to the user prompt STRICTLY IN JSON \
+format and end the statement. \
+Always put numbers with a FLOATING POINT in the parameters. \
 
-        Prompt: What is the sum of 2 and 3?
-        Response: {{\"prompt\":\"What is the sum of 2 and 3?\",\
-        \"name\":\"fn_add_numbers\" ,\"parameters\":\
-        {{"a":2.0,"b":3.0}}}}\n
+Prompt: What is the sum of 2 and 3?
+Response: \"prompt\":\"What is the sum of 2 and 3?\",\
+\"name\":\"fn_add_numbers\",\"parameters\":\
+{{"a":2.0,"b":3.0}}
 
-        COMPLY with what stated above verbatim.
-        Prompt: {usr_prompt}
-        Response: \
-        {{"prompt":"{usr_prompt}","name":"{func_name}",parameters:{{\
-        """
-
+COMPLY with what stated above VERBATIM.
+Prompt: {usr_prompt}
+Response: \
+"prompt":"{usr_prompt}","name":"{func_name}",parameters:{{\
+"""
         parameters = "{"
+        meow = {}
         func = None
         for x in self.funcs:
-            print(x)
             if (x["name"] == func_name):
                 func = x
         for param in func["parameters"].keys():
             prompt += f'"{param}":'
             parameters += f'"{param}":'
+            parameter = ""
+            if (func["parameters"][param]["type"] == "string"):
+                prompt += '"'
+                parameters += '"'
+                parameter += '"'
             while (1):
                 new_token = self.predict_token(prompt)
                 type = func["parameters"][param]["type"]
-                if (self.end_gen(new_token[0], type, parameters)):
-                    prompt += ","
-                    parameters += ","
-                    break
+                parameter += new_token[0]
                 prompt += new_token[0]
                 parameters += new_token[0]
+                if (self.end_gen(type, parameter)):
+                    if type == "string":
+                        idx = parameters.rfind('"')
+                        parameters = parameters[:idx + 1]
+                        idx = parameter.rfind('"')
+                        meow[param] = parameter[1:idx]
+                        idx = prompt.rfind('"')
+                        prompt = prompt[:idx + 1]
+                    elif type == "boolean":
+                        char = "," if parameter.find(",") != -1 else "}"
+                        idx = parameters.rfind(char)
+                        parameters = parameters[:idx]
+                        idx = parameter.rfind(char)
+                        meow[param] = bool(parameter[0:idx].
+                                           strip().lower() == "true")
+                        idx = prompt.rfind(char)
+                        prompt = prompt[:idx]
+                    elif type == "number":
+                        char = "," if parameter.find(",") != -1 else "}"
+                        idx = parameters.rfind(char)
+                        parameters = parameters[:idx]
+                        idx = parameter.rfind(char)
+                        meow[param] = float(parameter[0:idx])
+                        idx = prompt.rfind(char)
+                        prompt = prompt[:idx]
+                    elif type == "integer":
+                        char = "."
+                        idx = parameters.rfind(char)
+                        parameters = parameters[:idx]
+                        idx = parameter.rfind(char)
+                        meow[param] = int(parameter[0:idx])
+                        idx = prompt.rfind(char)
+                        prompt = prompt[:idx]
+                    parameters += ","
+                    prompt += ","
+                    break
         parameters = parameters[:-1] + "}"
-        return parameters
+        return meow
