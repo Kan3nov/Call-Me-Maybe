@@ -2,17 +2,6 @@ from pydantic import BaseModel, model_validator, InstanceOf
 from llm_sdk import Small_LLM_Model as LLM
 from typing import Any
 import json
-from enum import Enum
-
-
-class Param(Enum):
-    INT = "NUMBER"
-    STR = "STRING"
-    BOOL = "BOOLEAN"
-    NUMBER = "NUMBER"
-    FLOAT = "NUMBER"
-    LIST = "LIST"
-    DICT = "DICT"
 
 
 class LlmResGen(BaseModel):
@@ -100,7 +89,7 @@ Response: "name":"\
                 return 1
             return 0
         elif type == "integer":
-            if '.' in param:
+            if '.' in param or '}' in param or ',' in param:
                 return 1
             return 0
         return 0
@@ -109,13 +98,13 @@ Response: "name":"\
         prompt = f"""
 Your role is to \
 determine the parameters of the function \
-corresponding to the user prompt STRICTLY IN JSON \
-format and end the statement. \
+corresponding to the user prompt. \
 Always put numbers with a FLOATING POINT in the parameters. \
+Put parameters as they are in the prompt LITERALLY.
 
 Prompt: What is the sum of 2 and 3?
-Response: \"prompt\":\"What is the sum of 2 and 3?\",\
-\"name\":\"fn_add_numbers\",\"parameters\":\
+Response: "prompt":"What is the sum of 2 and 3?",\
+"name":"fn_add_numbers","parameters":\
 {{"a":2.0,"b":3.0}}
 
 COMPLY with what stated above VERBATIM.
@@ -123,7 +112,6 @@ Prompt: {usr_prompt}
 Response: \
 "prompt":"{usr_prompt}","name":"{func_name}",parameters:{{\
 """
-        parameters = "{"
         meow = {}
         func = None
         for x in self.funcs:
@@ -131,30 +119,28 @@ Response: \
                 func = x
         for param in func["parameters"].keys():
             prompt += f'"{param}":'
-            parameters += f'"{param}":'
             parameter = ""
             if (func["parameters"][param]["type"] == "string"):
                 prompt += '"'
-                parameters += '"'
                 parameter += '"'
+            prompt_start = len(prompt) - 1
             while (1):
                 new_token = self.predict_token(prompt)
+                print("new_token : ", new_token)
                 type = func["parameters"][param]["type"]
                 parameter += new_token[0]
                 prompt += new_token[0]
-                parameters += new_token[0]
                 if (self.end_gen(type, parameter)):
                     if type == "string":
-                        idx = parameters.rfind('"')
-                        parameters = parameters[:idx + 1]
-                        idx = parameter.rfind('"')
+                        for idx, char in enumerate(parameter):
+                            if idx == 0:
+                                continue
+                            elif char == '"' and parameter[idx - 1] != "\\":
+                                break
                         meow[param] = parameter[1:idx]
-                        idx = prompt.rfind('"')
-                        prompt = prompt[:idx + 1]
+                        prompt = prompt[:prompt_start + idx + 1]
                     elif type == "boolean":
                         char = "," if parameter.find(",") != -1 else "}"
-                        idx = parameters.rfind(char)
-                        parameters = parameters[:idx]
                         idx = parameter.rfind(char)
                         meow[param] = bool(parameter[0:idx].
                                            strip().lower() == "true")
@@ -162,22 +148,23 @@ Response: \
                         prompt = prompt[:idx]
                     elif type == "number":
                         char = "," if parameter.find(",") != -1 else "}"
-                        idx = parameters.rfind(char)
-                        parameters = parameters[:idx]
                         idx = parameter.rfind(char)
                         meow[param] = float(parameter[0:idx])
                         idx = prompt.rfind(char)
                         prompt = prompt[:idx]
                     elif type == "integer":
-                        char = "."
-                        idx = parameters.rfind(char)
-                        parameters = parameters[:idx]
-                        idx = parameter.rfind(char)
+                        chars = [".", ",", "}"]
+                        idxs = [parameter.rfind(chars[0]),
+                                parameter.rfind(chars[1]),
+                                parameter.rfind(chars[2])]
+                        for i, idx in enumerate(idxs):
+                            if idx == -1:
+                                idxs[i] = float("inf")
+                        idx = min(idxs)
+                        char = chars[idxs.index(idx)]
                         meow[param] = int(parameter[0:idx])
                         idx = prompt.rfind(char)
                         prompt = prompt[:idx]
-                    parameters += ","
                     prompt += ","
                     break
-        parameters = parameters[:-1] + "}"
         return meow
