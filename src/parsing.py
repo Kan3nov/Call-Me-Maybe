@@ -1,4 +1,8 @@
-from typing import Any
+try:
+    from typing import Any
+except Exception as e:
+    print("Import error:", e)
+    exit()
 
 
 def validation(argv: list[Any]) -> dict[str, str] | None:

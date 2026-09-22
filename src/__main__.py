@@ -7,13 +7,18 @@ try:
     import json
 except Exception as e:
     print("Import Error,", e)
+    exit()
 
 if __name__ == "__main__":
     files_dirs = validation(sys.argv)
     if (not files_dirs):
         exit()
-    with open(files_dirs["input"], "r") as f:
-        prompts = json.loads(f.read())
+    try:
+        with open(files_dirs["input"], "r") as f:
+            prompts = json.loads(f.read())
+    except Exception as e:
+        print("Error reading user prompts", e)
+
     response_gen = LlmResGen(llm=LLM(),
                              files_dirs=files_dirs)
     answer = []

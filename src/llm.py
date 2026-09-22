@@ -1,7 +1,11 @@
-from pydantic import BaseModel, model_validator, InstanceOf
-from llm_sdk import Small_LLM_Model as LLM
-from typing import Any
-import json
+try:
+    from pydantic import BaseModel, model_validator, InstanceOf
+    from llm_sdk import Small_LLM_Model as LLM
+    from typing import Any
+    import json
+except Exception as e:
+    print("Import error: ", e)
+    exit()
 
 
 class LlmResGen(BaseModel):
@@ -22,14 +26,13 @@ class LlmResGen(BaseModel):
         try:
             with open(self.files_dirs["functions_definition"], "r") as f:
                 self.funcs = json.loads(f.read())
-            with open(self.files_dirs["functions_definition"], "r") as f:
-                self.funcs_str = f.read()
             undefined_func = {"name": "fn_undefined",
                               "description": "used when no function " +
                               "satisfies the prompt",
-                              "parameters": {"None": "None"},
+                              "parameters": {"None": {"type": "None"}},
                               "returns": {"type": "None"}}
             self.funcs.append(undefined_func)
+            self.funcs_str = json.dumps(self.funcs)
         except Exception as e:
             print("Error reading function definitions file:", e)
             exit()
@@ -43,11 +46,32 @@ class LlmResGen(BaseModel):
         obj["parameters"] = params
         return obj
 
-    def predict_token(self, prompt: str) -> tuple[str, int]:
+    def mask(self, logits: list[float], type: str) -> None:
+        if (type == "integer" or type == "number"):
+            chars = "0123456789.,}"
+            for token_id in range(len(logits)):
+                if set(self.llm.decode([token_id])).isdisjoint(set(chars)):
+                    logits[token_id] = float("-inf")
+        elif (type == "boolean"):
+            chars = "true,false}"
+            for token_id in range(len(logits)):
+                if set(self.llm.decode([token_id])).isdisjoint(set(chars)):
+                    logits[token_id] = float("-inf")
+        elif (type == "func"):
+            chars = set()
+            for func in self.funcs:
+                chars = chars.union(set(func["name"]))
+            for token_id in range(len(logits)):
+                if set(self.llm.decode([token_id])).isdisjoint(set(chars)):
+                    logits[token_id] = float("-inf")
+
+    def predict_token(self, prompt: str, type: str = None) -> tuple[str, int]:
         id_tensor = self.llm.encode(prompt)[0].tolist()
         logits = self.llm.get_logits_from_input_ids(id_tensor)
+        self.mask(logits, type)
         token_id = logits.index(max(logits))
         token = self.llm.decode([token_id])
+        print(token)
         return (token, token_id)
 
     def predict_func(self, usr_prompt: str) -> str:
@@ -62,13 +86,14 @@ Response: "name":"fn_add_numbers"
 
 COMPLY with what stated above verbatim. \
 WRITE the full name of the function.
+If the prompt is emtpy or weird, pick the fn_undefined function.
 
 Prompt: {usr_prompt}
 Response: "name":"\
 """
         func_name = ""
         while (1):
-            next_token = self.predict_token(prompt)
+            next_token = self.predict_token(prompt, "func")
             for function in self.funcs:
                 if (function["name"].find(func_name + next_token[0]) != -1):
                     func_name = func_name + next_token[0]
@@ -79,7 +104,7 @@ Response: "name":"\
         return func_name
 
     def end_gen(self, type: str, param: str):
-        if type == "string":
+        if type == "string" or type == "undefined":
             idx = param.rfind('"')
             if idx > 0 and param[idx - 1] != "\\":
                 return 1
@@ -96,11 +121,15 @@ Response: "name":"\
 
     def predict_params(self, usr_prompt: str, func_name: str) -> str:
         prompt = f"""
-Your role is to \
+You are an expert AI assistant. Your role is to \
 determine the parameters of the function \
 corresponding to the user prompt. \
 Always put numbers with a FLOATING POINT in the parameters. \
 Put parameters as they are in the prompt LITERALLY.
+When dealing with regex:
+Example 1:
+Description: Match a valid email address
+Output: ^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{{2,}}$
 
 Prompt: What is the sum of 2 and 3?
 Response: "prompt":"What is the sum of 2 and 3?",\
@@ -125,19 +154,21 @@ Response: \
                 parameter += '"'
             prompt_start = len(prompt) - 1
             while (1):
-                new_token = self.predict_token(prompt)
-                print("new_token : ", new_token)
+                new_token = self.predict_token(
+                                            prompt,
+                                            func["parameters"][param]["type"])
                 type = func["parameters"][param]["type"]
                 parameter += new_token[0]
                 prompt += new_token[0]
                 if (self.end_gen(type, parameter)):
-                    if type == "string":
+                    if type == "string" or type == "undefined":
+                        parameter = parameter.replace("\\\\", "\\")
                         for idx, char in enumerate(parameter):
                             if idx == 0:
                                 continue
                             elif char == '"' and parameter[idx - 1] != "\\":
                                 break
-                        meow[param] = parameter[1:idx]
+                        meow[param] = parameter[1:idx].replace('\\"', '"')
                         prompt = prompt[:prompt_start + idx + 1]
                     elif type == "boolean":
                         char = "," if parameter.find(",") != -1 else "}"
