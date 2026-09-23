@@ -1,7 +1,7 @@
 try:
     from pydantic import BaseModel, model_validator, InstanceOf
     from llm_sdk import Small_LLM_Model as LLM
-    from typing import Any
+    from typing import Any, Optional
     import json
 except Exception as e:
     print("Import error: ", e)
@@ -11,9 +11,9 @@ except Exception as e:
 class LlmResGen(BaseModel):
     llm: InstanceOf[LLM]
     files_dirs: dict[str, str]
-    funcs: list[dict[str, Any]] = None
-    funcs_str: str = None
-    vocab: list[dict[int, str]] = None
+    funcs: Optional[list[dict[str, Any]]] = None
+    funcs_str: Optional[str] = None
+    vocab: Optional[list[dict[int, str]]] = None
 
     @model_validator(mode='after')
     def meow(self) -> dict:
@@ -27,10 +27,10 @@ class LlmResGen(BaseModel):
             with open(self.files_dirs["functions_definition"], "r") as f:
                 self.funcs = json.loads(f.read())
             undefined_func = {"name": "fn_undefined",
-                              "description": "used when no function " +
-                              "satisfies the prompt",
-                              "parameters": {"None": {"type": "None"}},
-                              "returns": {"type": "None"}}
+                              "description": "used when with obscure or empty "
+                              "prompts",
+                              "parameters": {"none": {"type": "none"}},
+                              "returns": {"type": "none"}}
             self.funcs.append(undefined_func)
             self.funcs_str = json.dumps(self.funcs)
         except Exception as e:
@@ -38,15 +38,15 @@ class LlmResGen(BaseModel):
             exit()
         return self
 
-    def gen_answer_obj(self, prompt: str):
-        obj = {}
+    def gen_answer_obj(self, prompt: str) -> dict[str, Any]:
+        obj: dict[str, Any] = {}
         obj["prompt"] = prompt
         obj["name"] = self.predict_func(prompt)
         params = self.predict_params(prompt, obj["name"])
         obj["parameters"] = params
         return obj
 
-    def mask(self, logits: list[float], type: str) -> None:
+    def mask(self, logits: list[float], type: Optional[str]) -> None:
         if (type == "integer" or type == "number"):
             chars = "0123456789.,}"
             for token_id in range(len(logits)):
@@ -58,42 +58,53 @@ class LlmResGen(BaseModel):
                 if set(self.llm.decode([token_id])).isdisjoint(set(chars)):
                     logits[token_id] = float("-inf")
         elif (type == "func"):
-            chars = set()
+            charss: set[str] = set()
+            if (not self.funcs):
+                return
             for func in self.funcs:
-                chars = chars.union(set(func["name"]))
+                charss = charss.union(set(func["name"]))
             for token_id in range(len(logits)):
-                if set(self.llm.decode([token_id])).isdisjoint(set(chars)):
+                if set(self.llm.decode([token_id])).isdisjoint(set(charss)):
                     logits[token_id] = float("-inf")
 
-    def predict_token(self, prompt: str, type: str = None) -> tuple[str, int]:
+    def predict_token(self, prompt: str,
+                      type: Optional[str] = None
+                      ) -> tuple[str, int]:
         id_tensor = self.llm.encode(prompt)[0].tolist()
         logits = self.llm.get_logits_from_input_ids(id_tensor)
         self.mask(logits, type)
         token_id = logits.index(max(logits))
         token = self.llm.decode([token_id])
-        print(token)
         return (token, token_id)
 
-    def predict_func(self, usr_prompt: str) -> str:
+    def predict_func(self, usr_prompt: str) -> Optional[str]:
         prompt = f"""\
 Your role is to pick the most suitable function \
 out of those functions:\
-{self.funcs_str}\n that returns right answer to the user \
-prompt given according to its description.
-
+{self.funcs_str}\n that does the demanded action by the user \
+prompt. In case of random meaning-less \
+or emtpy \
+prompts; or if no other function matches the user's need, \
+pick the fn_undefined function.
+# Example1
 Prompt: What is the sum of 2 and 3?
 Response: "name":"fn_add_numbers"
+#Example2
+
+Prompt: asjd ksjfh asdjk
+Response: "name":"fn_undefined"
 
 COMPLY with what stated above verbatim. \
 WRITE the full name of the function.
-If the prompt is emtpy or weird, pick the fn_undefined function.
 
-Prompt: {usr_prompt}
+Prompt: "{usr_prompt}",
 Response: "name":"\
 """
         func_name = ""
         while (1):
             next_token = self.predict_token(prompt, "func")
+            if (not self.funcs):
+                return None
             for function in self.funcs:
                 if (function["name"].find(func_name + next_token[0]) != -1):
                     func_name = func_name + next_token[0]
@@ -103,8 +114,8 @@ Response: "name":"\
                 break
         return func_name
 
-    def end_gen(self, type: str, param: str):
-        if type == "string" or type == "undefined":
+    def end_gen(self, type: str, param: str) -> int:
+        if type == "string" or type == "none":
             idx = param.rfind('"')
             if idx > 0 and param[idx - 1] != "\\":
                 return 1
@@ -119,7 +130,8 @@ Response: "name":"\
             return 0
         return 0
 
-    def predict_params(self, usr_prompt: str, func_name: str) -> str:
+    def predict_params(self, usr_prompt: str,
+                       func_name: str) -> Optional[dict[str, Any]]:
         prompt = f"""
 You are an expert AI assistant. Your role is to \
 determine the parameters of the function \
@@ -141,11 +153,15 @@ Prompt: {usr_prompt}
 Response: \
 "prompt":"{usr_prompt}","name":"{func_name}",parameters:{{\
 """
-        meow = {}
+        meow: dict[str, Any] = {}
         func = None
+        if (not self.funcs):
+            return None
         for x in self.funcs:
             if (x["name"] == func_name):
                 func = x
+        if (not func):
+            return None
         for param in func["parameters"].keys():
             prompt += f'"{param}":'
             parameter = ""
@@ -185,12 +201,11 @@ Response: \
                         prompt = prompt[:idx]
                     elif type == "integer":
                         chars = [".", ",", "}"]
-                        idxs = [parameter.rfind(chars[0]),
+                        idxs: list[int] = [
+                                parameter.rfind(chars[0]),
                                 parameter.rfind(chars[1]),
                                 parameter.rfind(chars[2])]
-                        for i, idx in enumerate(idxs):
-                            if idx == -1:
-                                idxs[i] = float("inf")
+                        idxs = [idx for idx in idxs if idx != -1]
                         idx = min(idxs)
                         char = chars[idxs.index(idx)]
                         meow[param] = int(parameter[0:idx])
