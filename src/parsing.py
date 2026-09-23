@@ -6,6 +6,15 @@ except Exception as e:
 
 
 def validation(argv: list[Any]) -> dict[str, str] | None:
+    """Ensures the arguments are in a correct format.
+
+    Args:
+        argv: list of string arguments.
+    Returns:
+        dict[str, str] | None: A dictionary whose keys indicate\
+         which file type and whose values are the paths of files.
+         returns NULL upon error.
+    """
     func_idx = 0
     input_idx = 0
     output_idx = 0

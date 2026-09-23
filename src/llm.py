@@ -9,6 +9,15 @@ except Exception as e:
 
 
 class LlmResGen(BaseModel):
+    """The JSON answer generator.
+
+        Attributes:
+            llm: the model.
+            files_dir: input and output files paths.
+            funcs: list of function definitions.
+            funcs_str: list of function definitions in a string format.
+            vocab: The list of all vocabulary provided by the llm.
+        """
     llm: InstanceOf[LLM]
     files_dirs: dict[str, str]
     funcs: Optional[list[dict[str, Any]]] = None
@@ -16,7 +25,14 @@ class LlmResGen(BaseModel):
     vocab: Optional[list[dict[int, str]]] = None
 
     @model_validator(mode='after')
-    def meow(self) -> dict:
+    def meow(self) -> "LlmResGen":
+        """Checks whether the input files are existant or not.
+
+        Args:
+            self: The LlmResGen object itself.
+        Returns:
+            LlmResGen: The LlmResGen object itself after validation.
+        """
         try:
             with open(self.llm.get_path_to_vocab_file(), "r") as f:
                 self.vocab = json.loads(f.read())
@@ -39,6 +55,15 @@ class LlmResGen(BaseModel):
         return self
 
     def gen_answer_obj(self, prompt: str) -> dict[str, Any]:
+        """Generates a JSON object that includes the model answer \
+        to a user prompt.
+
+        Args:
+            prompt: the user prompt.
+        Returns:
+            dict[str, Any]: the JSON object containing the user prompt, \
+            the function name, and the parameters passed to the function.
+        """
         obj: dict[str, Any] = {}
         obj["prompt"] = prompt
         obj["name"] = self.predict_func(prompt)
@@ -47,6 +72,12 @@ class LlmResGen(BaseModel):
         return obj
 
     def mask(self, logits: list[float], type: Optional[str]) -> None:
+        """Implements masking on the logits produced by the model.
+
+        Args:
+            logits: list of integer logits produced by the model.
+            type: type of the expected token
+        """
         if (type == "integer" or type == "number"):
             chars = "0123456789.,}"
             for token_id in range(len(logits)):
@@ -70,6 +101,15 @@ class LlmResGen(BaseModel):
     def predict_token(self, prompt: str,
                       type: Optional[str] = None
                       ) -> tuple[str, int]:
+        """Predicts the next token in a prompt.
+
+        Args:
+            prompt: the user prompt.
+            type: the expected type of the token
+        Returns:
+            tuple[str, int]: the first element is the token itself, \
+            and the second is the token id.
+        """
         id_tensor = self.llm.encode(prompt)[0].tolist()
         logits = self.llm.get_logits_from_input_ids(id_tensor)
         self.mask(logits, type)
@@ -78,6 +118,13 @@ class LlmResGen(BaseModel):
         return (token, token_id)
 
     def predict_func(self, usr_prompt: str) -> Optional[str]:
+        """Predicts the suitable function name for a user prompt.
+
+        Args:
+            usr_prompt: the user prompt.
+        Returns:
+            Optional[str]: the function name; None .
+        """
         prompt = f"""\
 Your role is to pick the most suitable function \
 out of those functions:\
@@ -86,9 +133,11 @@ prompt. In case of random meaning-less \
 or emtpy \
 prompts; or if no other function matches the user's need, \
 pick the fn_undefined function.
-# Example1
+
+#Example1
 Prompt: What is the sum of 2 and 3?
 Response: "name":"fn_add_numbers"
+
 #Example2
 
 Prompt: asjd ksjfh asdjk
@@ -115,6 +164,14 @@ Response: "name":"\
         return func_name
 
     def end_gen(self, type: str, param: str) -> int:
+        """Determines when to halt the prediction of new tokens.
+
+        Args:
+            type: type of the desired parameter.
+            param: the already generated parameter.
+        Returns:
+            int: 1 if prediction should be stopped, 0 if otherwise.
+        """
         if type == "string" or type == "none":
             idx = param.rfind('"')
             if idx > 0 and param[idx - 1] != "\\":
@@ -132,6 +189,15 @@ Response: "name":"\
 
     def predict_params(self, usr_prompt: str,
                        func_name: str) -> Optional[dict[str, Any]]:
+        """Predicts the suitable set of parameters sent to the chosen function.
+
+        Args:
+            usr_promt: the user prompt.
+            func_name: the function name.
+        Returns:
+            Optional[dict[str, Any]]: a dictionary of each parameter's name \
+            and its corresponding value. Returns None on error.
+        """
         prompt = f"""
 You are an expert AI assistant. Your role is to \
 determine the parameters of the function \
