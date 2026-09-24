@@ -9,6 +9,7 @@ run: install
 
 install:
 	@uv sync
+	@cd llm_sdk && uv sync
 
 debug: install
 	@uv run python -m pdb src/__main__.py

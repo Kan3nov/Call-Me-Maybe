@@ -3,6 +3,7 @@ output/
 moulinette/
 .vscode/
 test.py
+.venv
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

@@ -43,7 +43,7 @@ class LlmResGen(BaseModel):
             with open(self.files_dirs["functions_definition"], "r") as f:
                 self.funcs = json.loads(f.read())
             undefined_func = {"name": "fn_undefined",
-                              "description": "used when with obscure or empty "
+                              "description": "used with irrelevant or empty "
                               "prompts",
                               "parameters": {"none": {"type": "none"}},
                               "returns": {"type": "none"}}
@@ -126,28 +126,18 @@ class LlmResGen(BaseModel):
             Optional[str]: the function name; None .
         """
         prompt = f"""\
-Your role is to pick the most suitable function \
-out of those functions:\
+Your role is to pick a suitable function \
+out of those functions ONLY:\
 {self.funcs_str}\n that does the demanded action by the user \
-prompt. In case of random meaning-less \
-or emtpy \
-prompts; or if no other function matches the user's need, \
-pick the fn_undefined function.
-
-#Example1
-Prompt: What is the sum of 2 and 3?
-Response: "name":"fn_add_numbers"
-
-#Example2
-
-Prompt: asjd ksjfh asdjk
-Response: "name":"fn_undefined"
+prompt. In case of undefined, emtpy \
+prompts; or if no function serves the user's need, \
+pick the fn_undefined function. Do not pick a non-existing function.
 
 COMPLY with what stated above verbatim. \
 WRITE the full name of the function.
 
 Prompt: "{usr_prompt}",
-Response: "name":"\
+Response: "function_name":"\
 """
         func_name = ""
         while (1):
@@ -198,21 +188,21 @@ Response: "name":"\
             Optional[dict[str, Any]]: a dictionary of each parameter's name \
             and its corresponding value. Returns None on error.
         """
+        match_funcs = [func for func in self.funcs if func["name"] ==
+                       func_name]
+        if (len(match_funcs) == 1):
+            func_def = match_funcs[0]
+        else:
+            print("Error predicting function name")
+            exit()
         prompt = f"""
 You are an expert AI assistant. Your role is to \
 determine the parameters of the function \
-corresponding to the user prompt. \
+corresponding to the user prompt and the function's definition. \
 Always put numbers with a FLOATING POINT in the parameters. \
 Put parameters as they are in the prompt LITERALLY.
-When dealing with regex:
-Example 1:
-Description: Match a valid email address
-Output: ^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{{2,}}$
 
-Prompt: What is the sum of 2 and 3?
-Response: "prompt":"What is the sum of 2 and 3?",\
-"name":"fn_add_numbers","parameters":\
-{{"a":2.0,"b":3.0}}
+{func_def}
 
 COMPLY with what stated above VERBATIM.
 Prompt: {usr_prompt}

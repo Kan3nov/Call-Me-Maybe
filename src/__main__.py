@@ -25,6 +25,7 @@ if __name__ == "__main__":
     for prompt in prompts:
         answer.append(response_gen.gen_answer_obj(prompt["prompt"]))
         print(answer[-1])
+        print()
     answer_json = json.dumps(answer, indent=4)
     file = Path(files_dirs["output"])
     file.parent.mkdir(parents=True, exist_ok=True)
