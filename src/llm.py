@@ -188,7 +188,10 @@ Response: "function_name":"\
             Optional[dict[str, Any]]: a dictionary of each parameter's name \
             and its corresponding value. Returns None on error.
         """
-        match_funcs = [func for func in self.funcs if func["name"] ==
+        if (not self.funcs):
+            print("Error predicting function name")
+            exit()
+        match_funcs = [func for func in self.funcs if dict(func)["name"] ==
                        func_name]
         if (len(match_funcs) == 1):
             func_def = match_funcs[0]
