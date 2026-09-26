@@ -18,6 +18,7 @@ if __name__ == "__main__":
             prompts = json.loads(f.read())
     except Exception as e:
         print("Error reading user prompts", e)
+        exit()
 
     response_gen = LlmResGen(llm=LLM(),
                              files_dirs=files_dirs)
@@ -29,5 +30,9 @@ if __name__ == "__main__":
     answer_json = json.dumps(answer, indent=4)
     file = Path(files_dirs["output"])
     file.parent.mkdir(parents=True, exist_ok=True)
-    with open(files_dirs["output"], "w") as f:
-        f.write(answer_json)
+    try:
+        with open(files_dirs["output"], "w") as f:
+            f.write(answer_json)
+    except Exception as e:
+        print("Error writing the output file", e)
+        exit()

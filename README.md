@@ -60,6 +60,7 @@ uv run python -m src
     - https://blog.promptlayer.com/system-prompt-vs-user-prompt-a-comprehensive-guide-for-ai-prompts/
 - **Masking**
     - https://jykroo.medium.com/mastering-masking-in-machine-learning-the-backbone-of-transformer-models-af3cbc48b9f2
-
+- **AI Usage**
+    - Was used to help with designing system prompts.
 # Final message
 We extend our deepest thanks and appreciation to the esteemed Mr. Mohammad Adel Khashan and Mr. Rashed Alrawajbeh —may God marry him off and watch over him—for his pivotal assistance in bringing this project to fruition. Happy birthday to you.

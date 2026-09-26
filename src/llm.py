@@ -129,7 +129,7 @@ class LlmResGen(BaseModel):
 Your role is to pick a suitable function \
 out of those functions ONLY:\
 {self.funcs_str}\n that does the demanded action by the user \
-prompt. In case of undefined, emtpy \
+prompt. In case of undefined, or emtpy \
 prompts; or if no function serves the user's need, \
 pick the fn_undefined function. Do not pick a non-existing function.
 
