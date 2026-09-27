@@ -1,23 +1,27 @@
 try:
     from llm_sdk import Small_LLM_Model as LLM
     from pathlib import Path
+    from pydantic import TypeAdapter
     import sys
     from parsing import validation
     from llm import LlmResGen
+    from json_schema import Prompt
     import json
 except Exception as e:
     print("Import Error,", e)
     exit()
-
 if __name__ == "__main__":
     files_dirs = validation(sys.argv)
     if (not files_dirs):
         exit()
     try:
         with open(files_dirs["input"], "r") as f:
-            prompts = json.loads(f.read())
+            prompt_adapter = TypeAdapter(list[Prompt])
+            content = f.read()
+            if (prompt_adapter.validate_json(content)):
+                prompts = json.loads(content)
     except Exception as e:
-        print("Error reading user prompts", e)
+        print("==========Error reading user prompts==========\n", e)
         exit()
 
     response_gen = LlmResGen(llm=LLM(),
@@ -34,5 +38,6 @@ if __name__ == "__main__":
         with open(files_dirs["output"], "w") as f:
             f.write(answer_json)
     except Exception as e:
-        print("Error writing the output file", e)
+        print("====== Error writing into the output file ======")
+        print(e)
         exit()

@@ -27,6 +27,63 @@ uv run python -m src [--functions_definition
 <function_definition_file>] [--input <input_file>] [--output
 <output_file>]
 ```
+
+## Input Files Format
+For the input prompts file; this is the only permissible format:
+```
+[
+{
+"prompt": "What is the sum of 2 and 3?"
+},
+{
+"prompt": "What is the sum of 265 and 345?"
+},
+{
+"prompt": "Greet shrek"
+},
+{
+"prompt": "Greet john"
+},
+{
+"prompt": "Reverse the string ’hello’"
+},
+...
+]
+```
+
+Define functions in this format:
+```
+[
+  {
+    "name": "fn_add_numbers",
+    "description": "Add two numbers together and return their sum.",
+    "parameters": {
+      "a": {
+        "type": "number"
+      },
+      "b": {
+        "type": "number"
+      }
+    },
+    "returns": {
+      "type": "number"
+    }
+  },
+  {
+    "name": "fn_greet",
+    "description": "Generate a greeting message for a person by name.",
+    "parameters": {
+      "name": {
+        "type": "string"
+      }
+    },
+    "returns": {
+      "type": "string"
+    }
+  },
+  ...
+]
+```
 # Algorithm explanation
 For constrained decoding, my program build the JSON structure single-handedly to ensure 100% JSON-compatible fomrat. The model's only role is filling the function name and parameter values in the structure. To further assure the output validity, I used the masking technique to prevent the model from predicting invalid tokens for each parameter type by setting their logit value to negative infinity. For example, for integer parameters, all tokens not including digits, a comma, or a closing curly brace are immediately eleminated.
 # Desgin decisions

@@ -1,6 +1,7 @@
 try:
-    from pydantic import BaseModel, model_validator, InstanceOf
+    from pydantic import BaseModel, model_validator, InstanceOf, TypeAdapter
     from llm_sdk import Small_LLM_Model as LLM
+    from json_schema import FuncDef
     from typing import Any, Optional
     import json
 except Exception as e:
@@ -41,16 +42,22 @@ class LlmResGen(BaseModel):
             exit()
         try:
             with open(self.files_dirs["functions_definition"], "r") as f:
-                self.funcs = json.loads(f.read())
+                content = f.read()
+                func_adapter = TypeAdapter(list[FuncDef])
+                if (func_adapter.validate_json(content)):
+                    self.funcs = json.loads(content)
             undefined_func = {"name": "fn_undefined",
                               "description": "used with irrelevant or empty "
                               "prompts",
                               "parameters": {"none": {"type": "none"}},
                               "returns": {"type": "none"}}
+            if (not self.funcs):
+                exit()
             self.funcs.append(undefined_func)
             self.funcs_str = json.dumps(self.funcs)
         except Exception as e:
-            print("Error reading function definitions file:", e)
+            print("=========Error reading function definitions file=========")
+            print(e)
             exit()
         return self
 
@@ -248,14 +255,28 @@ Response: \
                     elif type == "boolean":
                         char = "," if parameter.find(",") != -1 else "}"
                         idx = parameter.rfind(char)
-                        meow[param] = bool(parameter[0:idx].
-                                           strip().lower() == "true")
+                        try:
+                            meow[param] = bool(parameter[0:idx].
+                                               strip().lower() == "true")
+                        except Exception as e:
+                            print(f"====== Error converting parameter \
+                                  {param} to boolean in function \
+                                  {func_name} for prompt \
+                                  {usr_prompt} ======")
+                            print(e)
                         idx = prompt.rfind(char)
                         prompt = prompt[:idx]
                     elif type == "number":
                         char = "," if parameter.find(",") != -1 else "}"
                         idx = parameter.rfind(char)
-                        meow[param] = float(parameter[0:idx])
+                        try:
+                            meow[param] = float(parameter[0:idx])
+                        except Exception as e:
+                            print(f"====== Error converting parameter \
+                                  {param} to float in function \
+                                  {func_name} for prompt \
+                                  {usr_prompt} ======")
+                            print(e)
                         idx = prompt.rfind(char)
                         prompt = prompt[:idx]
                     elif type == "integer":
@@ -267,7 +288,14 @@ Response: \
                         idxs = [idx for idx in idxs if idx != -1]
                         idx = min(idxs)
                         char = chars[idxs.index(idx)]
-                        meow[param] = int(parameter[0:idx])
+                        try:
+                            meow[param] = int(parameter[0:idx])
+                        except Exception as e:
+                            print(f"====== Error converting parameter \
+                                  {param} to integer in function \
+                                  {func_name} for prompt \
+                                  {usr_prompt} ======")
+                            print(e)
                         idx = prompt.rfind(char)
                         prompt = prompt[:idx]
                     prompt += ","
